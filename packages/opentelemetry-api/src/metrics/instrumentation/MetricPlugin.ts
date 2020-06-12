@@ -1,5 +1,5 @@
-/*!
- * Copyright 2019, OpenTelemetry Authors
+/*
+ * Copyright 2020, OpenTelemetry Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,11 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { MeterProvider } from '../MeterProvider';
 
-export * from './BasePlugin';
-export * from './BaseMetricPlugin';
-export * from './hex-to-base64';
-export * from './id';
-export * from './performance';
-export * from './sdk-info';
-export * from './timer-util';
+export interface MetricPlugin<T = any> {
+  enable(
+    moduleExports: T,
+    meterProvider: MeterProvider,
+    config?: MetricPluginConfig
+  ): T;
+
+  disable(): void;
+}
+
+export interface MetricPluginConfig {
+  enabled?: boolean;
+}

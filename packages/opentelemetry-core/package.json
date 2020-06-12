@@ -76,7 +76,7 @@
     "webpack": "^4.35.2"
   },
   "dependencies": {
-    "@opentelemetry/api": "^0.8.3",
+    "@opentelemetry/api": "../opentelemetry-api",
     "@opentelemetry/context-base": "^0.8.3",
     "semver": "^7.1.3"
   }
