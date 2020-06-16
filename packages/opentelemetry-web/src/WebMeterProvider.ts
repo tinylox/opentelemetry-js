@@ -14,9 +14,24 @@
  * limitations under the License.
  */
 import { MeterProvider, MeterConfig } from '@opentelemetry/metrics';
+import { BaseMetricPlugin } from '@opentelemetry/core/build/src/platform/browser';
+
+export interface WebMeterConfig extends MeterConfig {
+  /**
+   * plugins to be used with tracer, they will be enabled automatically
+   */
+  plugins?: BaseMetricPlugin<unknown>[];
+}
 
 export class WebMeterProvider extends MeterProvider {
-  constructor(config: MeterConfig = {}) {
+  constructor(config: WebMeterConfig = {}) {
+    if (typeof config.plugins === 'undefined') {
+      config.plugins = [];
+    }
     super(config);
+
+    for (const plugin of config.plugins) {
+      plugin.enable([], this);
+    }
   }
 }
