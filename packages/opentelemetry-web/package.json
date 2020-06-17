@@ -77,6 +77,7 @@
     "@opentelemetry/api": "^0.8.3",
     "@opentelemetry/context-base": "^0.8.3",
     "@opentelemetry/core": "^0.8.3",
+    "@opentelemetry/metrics": "^0.8.3",
     "@opentelemetry/tracing": "^0.8.3"
   }
 }

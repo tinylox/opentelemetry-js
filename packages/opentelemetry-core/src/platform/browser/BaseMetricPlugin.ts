@@ -13,10 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { BaseAbstractMetricPlugin } from '../BaseAbstractMetricPlugin';
+import {
+  MetricPlugin,
+  MetricPluginConfig,
+  MeterProvider,
+} from '@opentelemetry/api';
 
-export * from './WebTracerProvider';
-export * from './WebMeterProvider';
-export * from './StackContextManager';
-export * from './enums/PerformanceTimingNames';
-export * from './types';
-export * from './utils';
+export abstract class BaseMetricPlugin<T> extends BaseAbstractMetricPlugin<T>
+  implements MetricPlugin<T> {
+  enable(
+    moduleExports: T,
+    meterProvider: MeterProvider,
+    config?: MetricPluginConfig
+  ): T {
+    this._meter = meterProvider.getMeter(this._meterName);
+    this._moduleExports = moduleExports;
+    if (config) this._config = config;
+    return this.patch();
+  }
+}
