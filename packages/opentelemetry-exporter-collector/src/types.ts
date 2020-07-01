@@ -89,7 +89,6 @@ export namespace opentelemetryProto {
       labels: opentelemetryProto.common.v1.StringKeyValue[];
       startTimeUnixNano: number;
       timeUnixNano: number;
-      value: number;
       count: number;
       sum: number;
       buckets: opentelemetryProto.metrics.v1.HistogramDataPointBucket[];
