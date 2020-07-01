@@ -15,38 +15,36 @@
  */
 
 import { NoopLogger } from '@opentelemetry/core';
-import { ReadableSpan } from '@opentelemetry/tracing';
 import * as assert from 'assert';
 import * as sinon from 'sinon';
-import {
-  CollectorExporter,
-  CollectorExporterConfig,
-} from '../../src/platform/browser/index';
+import { CollectorMetricExporter } from '../../src/platform/browser/index';
 import * as collectorTypes from '../../src/types';
-
+import { MetricRecord } from '@opentelemetry/metrics';
 import {
-  ensureSpanIsCorrect,
-  ensureExportTraceServiceRequestIsSet,
+  mockCounter,
+  mockObserver,
+  ensureCounterIsCorrect,
+  ensureObserverIsCorrect,
   ensureWebResourceIsCorrect,
+  ensureExportMetricsServiceRequestIsSet,
   ensureHeadersContain,
-  mockedReadableSpan,
 } from '../helper';
 const sendBeacon = navigator.sendBeacon;
 
-describe('CollectorExporter - web', () => {
-  let collectorExporter: CollectorExporter;
-  let collectorExporterConfig: CollectorExporterConfig;
+describe('CollectorMetricExporter - web', () => {
+  let collectorExporter: CollectorMetricExporter;
   let spyOpen: any;
   let spySend: any;
   let spyBeacon: any;
-  let spans: ReadableSpan[];
+  let metrics: MetricRecord[];
 
   beforeEach(() => {
     spyOpen = sinon.stub(XMLHttpRequest.prototype, 'open');
     spySend = sinon.stub(XMLHttpRequest.prototype, 'send');
     spyBeacon = sinon.stub(navigator, 'sendBeacon');
-    spans = [];
-    spans.push(Object.assign({}, mockedReadableSpan));
+    metrics = [];
+    metrics.push(Object.assign({}, mockCounter));
+    metrics.push(Object.assign({}, mockObserver));
   });
 
   afterEach(() => {
@@ -57,23 +55,20 @@ describe('CollectorExporter - web', () => {
   });
 
   describe('export', () => {
-    beforeEach(() => {
-      collectorExporterConfig = {
-        hostName: 'foo',
-        logger: new NoopLogger(),
-        serviceName: 'bar',
-        attributes: {},
-        url: 'http://foo.bar.com',
-      };
-    });
-
     describe('when "sendBeacon" is available', () => {
       beforeEach(() => {
-        collectorExporter = new CollectorExporter(collectorExporterConfig);
+        collectorExporter = new CollectorMetricExporter({
+          logger: new NoopLogger(),
+          url: 'http://foo.bar.com',
+          serviceName: 'bar',
+        });
+        // Overwrites the start time to make tests consistent
+        Object.defineProperty(collectorExporter, '_startTime', {
+          value: 1592602232694000000,
+        });
       });
-
-      it('should successfully send the spans using sendBeacon', done => {
-        collectorExporter.export(spans, () => {});
+      it('should successfully send metrics using sendBeacon', done => {
+        collectorExporter.export(metrics, () => {});
 
         setTimeout(() => {
           const args = spyBeacon.args[0];
@@ -81,16 +76,25 @@ describe('CollectorExporter - web', () => {
           const body = args[1];
           const json = JSON.parse(
             body
-          ) as collectorTypes.opentelemetryProto.collector.trace.v1.ExportTraceServiceRequest;
-          const span1 =
-            json.resourceSpans[0].instrumentationLibrarySpans[0].spans[0];
+          ) as collectorTypes.opentelemetryProto.collector.metrics.v1.ExportMetricsServiceRequest;
+          const metric1 =
+            json.resourceMetrics[0].instrumentationLibraryMetrics[0].metrics[0];
+          const metric2 =
+            json.resourceMetrics[1].instrumentationLibraryMetrics[0].metrics[0];
 
-          assert.ok(typeof span1 !== 'undefined', "span doesn't exist");
-          if (span1) {
-            ensureSpanIsCorrect(span1);
+          assert.ok(typeof metric1 !== 'undefined', "metric doesn't exist");
+          if (metric1) {
+            ensureCounterIsCorrect(metric1);
+          }
+          assert.ok(
+            typeof metric2 !== 'undefined',
+            "second metric doesn't exist"
+          );
+          if (metric2) {
+            ensureObserverIsCorrect(metric2);
           }
 
-          const resource = json.resourceSpans[0].resource;
+          const resource = json.resourceMetrics[0].resource;
           assert.ok(typeof resource !== 'undefined', "resource doesn't exist");
           if (resource) {
             ensureWebResourceIsCorrect(resource);
@@ -101,7 +105,7 @@ describe('CollectorExporter - web', () => {
 
           assert.strictEqual(spyOpen.callCount, 0);
 
-          ensureExportTraceServiceRequestIsSet(json);
+          ensureExportMetricsServiceRequestIsSet(json);
 
           done();
         });
@@ -113,7 +117,7 @@ describe('CollectorExporter - web', () => {
         spyBeacon.restore();
         spyBeacon = sinon.stub(window.navigator, 'sendBeacon').returns(true);
 
-        collectorExporter.export(spans, () => {});
+        collectorExporter.export(metrics, () => {});
 
         setTimeout(() => {
           const response: any = spyLoggerDebug.args[1][0];
@@ -130,7 +134,7 @@ describe('CollectorExporter - web', () => {
         spyBeacon.restore();
         spyBeacon = sinon.stub(window.navigator, 'sendBeacon').returns(false);
 
-        collectorExporter.export(spans, () => {});
+        collectorExporter.export(metrics, () => {});
 
         setTimeout(() => {
           const response: any = spyLoggerError.args[0][0];
@@ -146,15 +150,23 @@ describe('CollectorExporter - web', () => {
       let server: any;
       beforeEach(() => {
         (window.navigator as any).sendBeacon = false;
-        collectorExporter = new CollectorExporter(collectorExporterConfig);
+        collectorExporter = new CollectorMetricExporter({
+          logger: new NoopLogger(),
+          url: 'http://foo.bar.com',
+          serviceName: 'bar',
+        });
+        // Overwrites the start time to make tests consistent
+        Object.defineProperty(collectorExporter, '_startTime', {
+          value: 1592602232694000000,
+        });
         server = sinon.fakeServer.create();
       });
       afterEach(() => {
         server.restore();
       });
 
-      it('should successfully send the spans using XMLHttpRequest', done => {
-        collectorExporter.export(spans, () => {});
+      it('should successfully send the metrics using XMLHttpRequest', done => {
+        collectorExporter.export(metrics, () => {});
 
         setTimeout(() => {
           const request = server.requests[0];
@@ -164,24 +176,31 @@ describe('CollectorExporter - web', () => {
           const body = request.requestBody;
           const json = JSON.parse(
             body
-          ) as collectorTypes.opentelemetryProto.collector.trace.v1.ExportTraceServiceRequest;
-          const span1 =
-            json.resourceSpans[0].instrumentationLibrarySpans[0].spans[0];
+          ) as collectorTypes.opentelemetryProto.collector.metrics.v1.ExportMetricsServiceRequest;
+          const metric1 =
+            json.resourceMetrics[0].instrumentationLibraryMetrics[0].metrics[0];
+          const metric2 =
+            json.resourceMetrics[1].instrumentationLibraryMetrics[0].metrics[0];
 
-          assert.ok(typeof span1 !== 'undefined', "span doesn't exist");
-          if (span1) {
-            ensureSpanIsCorrect(span1);
+          assert.ok(typeof metric1 !== 'undefined', "metric doesn't exist");
+          if (metric1) {
+            ensureCounterIsCorrect(metric1);
           }
-
-          const resource = json.resourceSpans[0].resource;
+          assert.ok(
+            typeof metric2 !== 'undefined',
+            "second metric doesn't exist"
+          );
+          if (metric2) {
+            ensureObserverIsCorrect(metric2);
+          }
+          const resource = json.resourceMetrics[0].resource;
           assert.ok(typeof resource !== 'undefined', "resource doesn't exist");
           if (resource) {
             ensureWebResourceIsCorrect(resource);
           }
 
           assert.strictEqual(spyBeacon.callCount, 0);
-
-          ensureExportTraceServiceRequestIsSet(json);
+          ensureExportMetricsServiceRequestIsSet(json);
 
           done();
         });
@@ -191,7 +210,7 @@ describe('CollectorExporter - web', () => {
         const spyLoggerDebug = sinon.stub(collectorExporter.logger, 'debug');
         const spyLoggerError = sinon.stub(collectorExporter.logger, 'error');
 
-        collectorExporter.export(spans, () => {});
+        collectorExporter.export(metrics, () => {});
 
         setTimeout(() => {
           const request = server.requests[0];
@@ -209,7 +228,7 @@ describe('CollectorExporter - web', () => {
       it('should log the error message', done => {
         const spyLoggerError = sinon.stub(collectorExporter.logger, 'error');
 
-        collectorExporter.export(spans, () => {});
+        collectorExporter.export(metrics, () => {});
 
         setTimeout(() => {
           const request = server.requests[0];
@@ -224,9 +243,8 @@ describe('CollectorExporter - web', () => {
           done();
         });
       });
-
       it('should send custom headers', done => {
-        collectorExporter.export(spans, () => {});
+        collectorExporter.export(metrics, () => {});
 
         setTimeout(() => {
           const request = server.requests[0];
@@ -245,6 +263,7 @@ describe('CollectorExporter - web', () => {
       foo: 'bar',
       bar: 'baz',
     };
+    let collectorExporterConfig: collectorTypes.CollectorExporterConfigBrowser;
 
     beforeEach(() => {
       collectorExporterConfig = {
@@ -260,10 +279,12 @@ describe('CollectorExporter - web', () => {
 
     describe('when "sendBeacon" is available', () => {
       beforeEach(() => {
-        collectorExporter = new CollectorExporter(collectorExporterConfig);
+        collectorExporter = new CollectorMetricExporter(
+          collectorExporterConfig
+        );
       });
       it('should successfully send custom headers using XMLHTTPRequest', done => {
-        collectorExporter.export(spans, () => {});
+        collectorExporter.export(metrics, () => {});
 
         setTimeout(() => {
           const [{ requestHeaders }] = server.requests;
@@ -280,11 +301,13 @@ describe('CollectorExporter - web', () => {
     describe('when "sendBeacon" is NOT available', () => {
       beforeEach(() => {
         (window.navigator as any).sendBeacon = false;
-        collectorExporter = new CollectorExporter(collectorExporterConfig);
+        collectorExporter = new CollectorMetricExporter(
+          collectorExporterConfig
+        );
       });
 
-      it('should successfully send spans using XMLHttpRequest', done => {
-        collectorExporter.export(spans, () => {});
+      it('should successfully send metrics using XMLHttpRequest', done => {
+        collectorExporter.export(metrics, () => {});
 
         setTimeout(() => {
           const [{ requestHeaders }] = server.requests;
@@ -296,27 +319,6 @@ describe('CollectorExporter - web', () => {
           done();
         });
       });
-    });
-  });
-});
-
-describe('CollectorExporter - browser (getDefaultUrl)', () => {
-  it('should default to v1/trace', done => {
-    const collectorExporter = new CollectorExporter({});
-    setTimeout(() => {
-      assert.strictEqual(
-        collectorExporter['url'],
-        'http://localhost:55678/v1/trace'
-      );
-      done();
-    });
-  });
-  it('should keep the URL if included', done => {
-    const url = 'http://foo.bar.com';
-    const collectorExporter = new CollectorExporter({ url });
-    setTimeout(() => {
-      assert.strictEqual(collectorExporter['url'], url);
-      done();
     });
   });
 });

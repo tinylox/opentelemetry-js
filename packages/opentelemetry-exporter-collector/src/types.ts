@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-import { SpanKind } from '@opentelemetry/api';
+import { SpanKind, Logger, Attributes } from '@opentelemetry/api';
 import * as api from '@opentelemetry/api';
+import * as grpc from 'grpc';
 
 // header to prevent instrumentation on request
 export const OT_REQUEST_HEADER = 'x-opentelemetry-outgoing-request';
@@ -23,6 +24,18 @@ export const OT_REQUEST_HEADER = 'x-opentelemetry-outgoing-request';
 /* eslint-disable @typescript-eslint/no-namespace */
 export namespace opentelemetryProto {
   export namespace collector {
+    export namespace metrics.v1 {
+      export interface ExportMetricsServiceError {
+        code: number;
+        details: string;
+        metadata: { [key: string]: unknown };
+        message: string;
+        stack: string;
+      }
+      export interface ExportMetricsServiceRequest {
+        resourceMetrics: opentelemetryProto.metrics.v1.ResourceMetrics[];
+      }
+    }
     export namespace trace.v1 {
       export interface TraceService {
         service: opentelemetryProto.collector.trace.v1.TraceService;
@@ -46,6 +59,95 @@ export namespace opentelemetryProto {
     export interface Resource {
       attributes: opentelemetryProto.common.v1.AttributeKeyValue[];
       droppedAttributesCount: number;
+    }
+  }
+
+  export namespace metrics.v1 {
+    export interface Metric {
+      metricDescriptor: opentelemetryProto.metrics.v1.MetricDescriptor;
+      int64DataPoints?: opentelemetryProto.metrics.v1.Int64DataPoint[];
+      doubleDataPoints?: opentelemetryProto.metrics.v1.DoubleDataPoint[];
+      histogramDataPoints?: opentelemetryProto.metrics.v1.HistogramDataPoint[];
+      summaryDataPoints?: opentelemetryProto.metrics.v1.SummaryDataPoint[];
+    }
+
+    export interface Int64DataPoint {
+      labels: opentelemetryProto.common.v1.StringKeyValue[];
+      startTimeUnixNano: number;
+      timeUnixNano: number;
+      value: number;
+    }
+
+    export interface DoubleDataPoint {
+      labels: opentelemetryProto.common.v1.StringKeyValue[];
+      startTimeUnixNano: number;
+      timeUnixNano: number;
+      value: number;
+    }
+
+    export interface HistogramDataPoint {
+      labels: opentelemetryProto.common.v1.StringKeyValue[];
+      startTimeUnixNano: number;
+      timeUnixNano: number;
+      count: number;
+      sum: number;
+      buckets: opentelemetryProto.metrics.v1.HistogramDataPointBucket[];
+      explicitBounds: number[];
+    }
+
+    export interface HistogramDataPointBucket {
+      count: number;
+    }
+
+    export interface SummaryDataPoint {
+      labels: opentelemetryProto.common.v1.StringKeyValue[];
+      startTimeUnixNano: number;
+      timeUnixNano: number;
+      value: number;
+      count: number;
+      sum: number;
+      percentileValues: opentelemetryProto.metrics.v1.SummaryDataPointValueAtPercentile[];
+    }
+
+    export interface SummaryDataPointValueAtPercentile {
+      percentile: number;
+      value: number;
+    }
+
+    export interface MetricDescriptor {
+      name: string;
+      description: string;
+      unit: string;
+      labels: opentelemetryProto.common.v1.StringKeyValue[];
+      type: opentelemetryProto.metrics.v1.MetricDescriptorType;
+      temporality: opentelemetryProto.metrics.v1.MetricDescriptorTemporality;
+    }
+
+    export interface InstrumentationLibraryMetrics {
+      instrumentationLibrary?: opentelemetryProto.common.v1.InstrumentationLibrary;
+      metrics: opentelemetryProto.metrics.v1.Metric[];
+    }
+
+    export interface ResourceMetrics {
+      resource?: opentelemetryProto.resource.v1.Resource;
+      instrumentationLibraryMetrics: opentelemetryProto.metrics.v1.InstrumentationLibraryMetrics[];
+    }
+
+    export enum MetricDescriptorType {
+      INVALID_TYPE,
+      INT64,
+      MONOTONIC_INT64,
+      DOUBLE,
+      MONOTONIC_DOUBLE,
+      HISTOGRAM,
+      SUMMARY,
+    }
+
+    export enum MetricDescriptorTemporality {
+      INVALID_TEMPORALITY,
+      INSTANTANEOUS,
+      DELTA,
+      CUMULATIVE,
     }
   }
 
@@ -168,6 +270,34 @@ export interface CollectorExporterError {
   code?: number;
   message?: string;
   stack?: string;
+}
+
+/**
+ * Collector Exporter base config
+ */
+export interface CollectorExporterConfigBase {
+  hostName?: string;
+  logger?: Logger;
+  serviceName?: string;
+  attributes?: Attributes;
+  url?: string;
+}
+
+/**
+ * Collector Exporter Config for Web
+ */
+export interface CollectorExporterConfigBrowser
+  extends CollectorExporterConfigBase {
+  headers?: { [key: string]: string };
+}
+
+/**
+ * Collector Exporter Config for Node
+ */
+export interface CollectorExporterConfigNode
+  extends CollectorExporterConfigBase {
+  credentials?: grpc.ChannelCredentials;
+  metadata?: grpc.Metadata;
 }
 
 /**

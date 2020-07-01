@@ -17,8 +17,20 @@
 import { Attributes, TimedEvent } from '@opentelemetry/api';
 import * as assert from 'assert';
 import * as transform from '../../src/transform';
-import { ensureSpanIsCorrect, mockedReadableSpan } from '../helper';
+import {
+  ensureSpanIsCorrect,
+  mockedReadableSpan,
+  mockCounter,
+  mockObserver,
+  mockedResources,
+  mockedInstrumentationLibraries,
+  multiResourceTrace,
+  multiInstrumentationLibraryTrace,
+  multiResourceMetrics,
+  multiInstrumentationLibraryMetrics,
+} from '../helper';
 import { Resource } from '@opentelemetry/resources';
+import { opentelemetryProto } from '../../src/types';
 
 describe('transform', () => {
   describe('toCollectorAttributes', () => {
@@ -116,6 +128,113 @@ describe('transform', () => {
           { key: 'success', type: 3, boolValue: true },
         ],
         droppedAttributesCount: 0,
+      });
+    });
+  });
+  describe('toCollectorMetricDescriptor', () => {
+    it('should convert counter', () => {
+      const descriptor = transform.toCollectorMetricDescriptor(mockCounter);
+      assert.deepStrictEqual(descriptor, {
+        description: 'sample counter description',
+        labels: [],
+        name: 'test-counter',
+        temporality:
+          opentelemetryProto.metrics.v1.MetricDescriptorTemporality.CUMULATIVE,
+        type:
+          opentelemetryProto.metrics.v1.MetricDescriptorType.MONOTONIC_INT64,
+        unit: '1',
+      });
+    });
+    it('should convert observer', () => {
+      const descriptor = transform.toCollectorMetricDescriptor(mockObserver);
+      assert.deepStrictEqual(descriptor, {
+        description: 'sample observer description',
+        labels: [],
+        name: 'test-observer',
+        temporality:
+          opentelemetryProto.metrics.v1.MetricDescriptorTemporality
+            .INSTANTANEOUS,
+        type: opentelemetryProto.metrics.v1.MetricDescriptorType.DOUBLE,
+        unit: '2',
+      });
+    });
+    describe('groupSpansByResourceAndLibrary', () => {
+      it('should group by resource', () => {
+        const [resource1, resource2] = mockedResources;
+        const [instrumentationLibrary] = mockedInstrumentationLibraries;
+        const [span1, span2, span3] = multiResourceTrace;
+
+        const expected = new Map([
+          [resource1, new Map([[instrumentationLibrary, [span1]]])],
+          [resource2, new Map([[instrumentationLibrary, [span2, span3]]])],
+        ]);
+
+        const result = transform.groupSpansByResourceAndLibrary(
+          multiResourceTrace
+        );
+
+        assert.deepStrictEqual(result, expected);
+      });
+
+      it('should group by instrumentation library', () => {
+        const [resource] = mockedResources;
+        const [lib1, lib2] = mockedInstrumentationLibraries;
+        const [span1, span2, span3] = multiInstrumentationLibraryTrace;
+
+        const expected = new Map([
+          [
+            resource,
+            new Map([
+              [lib1, [span1, span2]],
+              [lib2, [span3]],
+            ]),
+          ],
+        ]);
+
+        const result = transform.groupSpansByResourceAndLibrary(
+          multiInstrumentationLibraryTrace
+        );
+
+        assert.deepStrictEqual(result, expected);
+      });
+    });
+    describe('groupMetricsByResourceAndLibrary', () => {
+      it('should group by resource', () => {
+        const [resource1, resource2] = mockedResources;
+        const [library] = mockedInstrumentationLibraries;
+        const [metric1, metric2, metric3] = multiResourceMetrics;
+
+        const expected = new Map([
+          [resource1, new Map([[library, [metric1, metric3]]])],
+          [resource2, new Map([[library, [metric2]]])],
+        ]);
+
+        const result = transform.groupMetricsByResourceAndLibrary(
+          multiResourceMetrics
+        );
+
+        assert.deepStrictEqual(result, expected);
+      });
+
+      it('should group by instrumentation library', () => {
+        const [resource] = mockedResources;
+        const [lib1, lib2] = mockedInstrumentationLibraries;
+        const [metric1, metric2, metric3] = multiInstrumentationLibraryMetrics;
+        const expected = new Map([
+          [
+            resource,
+            new Map([
+              [lib1, [metric1, metric3]],
+              [lib2, [metric2]],
+            ]),
+          ],
+        ]);
+
+        const result = transform.groupMetricsByResourceAndLibrary(
+          multiInstrumentationLibraryMetrics
+        );
+
+        assert.deepStrictEqual(result, expected);
       });
     });
   });

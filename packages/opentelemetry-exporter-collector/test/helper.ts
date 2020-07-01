@@ -14,12 +14,19 @@
  * limitations under the License.
  */
 
-import { TraceFlags } from '@opentelemetry/api';
+import { TraceFlags, ValueType } from '@opentelemetry/api';
 import { ReadableSpan } from '@opentelemetry/tracing';
 import { Resource } from '@opentelemetry/resources';
 import * as assert from 'assert';
 import { opentelemetryProto } from '../src/types';
 import * as collectorTypes from '../src/types';
+import {
+  MetricRecord,
+  MetricKind,
+  SumAggregator,
+  LastValueAggregator,
+} from '@opentelemetry/metrics';
+import { InstrumentationLibrary } from '@opentelemetry/core';
 import * as grpc from 'grpc';
 
 if (typeof Buffer === 'undefined') {
@@ -29,6 +36,22 @@ if (typeof Buffer === 'undefined') {
     },
   };
 }
+
+export const mockedResources: Resource[] = [
+  new Resource({ name: 'resource 1' }),
+  new Resource({ name: 'resource 2' }),
+];
+
+export const mockedInstrumentationLibraries: InstrumentationLibrary[] = [
+  {
+    name: 'lib1',
+    version: '0.0.1',
+  },
+  {
+    name: 'lib2',
+    version: '0.0.2',
+  },
+];
 
 const traceIdArr = [
   31,
@@ -54,6 +77,42 @@ const parentIdArr = [120, 168, 145, 80, 152, 134, 67, 136];
 const traceIdBase64 = 'HxAI3I4nDoXECg18OTmyeA==';
 const spanIdBase64 = 'XhByYfZPpT4=';
 const parentIdBase64 = 'eKiRUJiGQ4g=';
+
+export const mockCounter: MetricRecord = {
+  descriptor: {
+    name: 'test-counter',
+    description: 'sample counter description',
+    unit: '1',
+    metricKind: MetricKind.COUNTER,
+    valueType: ValueType.INT,
+  },
+  labels: {},
+  aggregator: new SumAggregator(),
+  resource: new Resource({
+    service: 'ui',
+    version: 1,
+    cost: 112.12,
+  }),
+  instrumentationLibrary: { name: 'default', version: '0.0.1' },
+};
+
+export const mockObserver: MetricRecord = {
+  descriptor: {
+    name: 'test-observer',
+    description: 'sample observer description',
+    unit: '2',
+    metricKind: MetricKind.VALUE_OBSERVER,
+    valueType: ValueType.DOUBLE,
+  },
+  labels: {},
+  aggregator: new LastValueAggregator(),
+  resource: new Resource({
+    service: 'ui',
+    version: 1,
+    cost: 112.12,
+  }),
+  instrumentationLibrary: { name: 'default', version: '0.0.1' },
+};
 
 export const mockedReadableSpan: ReadableSpan = {
   name: 'documentFetch',
@@ -106,7 +165,137 @@ export const mockedReadableSpan: ReadableSpan = {
     version: 1,
     cost: 112.12,
   }),
+  instrumentationLibrary: { name: 'default', version: '0.0.1' },
 };
+
+export const basicTrace: ReadableSpan[] = [
+  {
+    name: 'span1',
+    kind: 0,
+    spanContext: {
+      traceId: '1f1008dc8e270e85c40a0d7c3939b278',
+      spanId: '5e107261f64fa53e',
+      traceFlags: TraceFlags.SAMPLED,
+    },
+    parentSpanId: '78a8915098864388',
+    startTime: [1574120165, 429803070],
+    endTime: [1574120165, 438688070],
+    ended: true,
+    status: { code: 0 },
+    attributes: {},
+    links: [],
+    events: [],
+    duration: [0, 8885000],
+    resource: mockedResources[0],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+  {
+    name: 'span2',
+    kind: 0,
+    spanContext: {
+      traceId: '1f1008dc8e270e85c40a0d7c3939b278',
+      spanId: 'f64fa53e5e107261',
+      traceFlags: TraceFlags.SAMPLED,
+    },
+    parentSpanId: '78a8915098864388',
+    startTime: [1575120165, 439803070],
+    endTime: [1575120165, 448688070],
+    ended: true,
+    status: { code: 0 },
+    attributes: {},
+    links: [],
+    events: [],
+    duration: [0, 8775000],
+    resource: mockedResources[0],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+  {
+    name: 'span3',
+    kind: 0,
+    spanContext: {
+      traceId: '1f1008dc8e270e85c40a0d7c3939b278',
+      spanId: '07261f64fa53e5e1',
+      traceFlags: TraceFlags.SAMPLED,
+    },
+    parentSpanId: 'a891578098864388',
+    startTime: [1575120165, 439803070],
+    endTime: [1575120165, 448688070],
+    ended: true,
+    status: { code: 0 },
+    attributes: {},
+    links: [],
+    events: [],
+    duration: [0, 8775000],
+    resource: mockedResources[0],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+];
+
+export const multiResourceTrace: ReadableSpan[] = [
+  {
+    ...basicTrace[0],
+    resource: mockedResources[0],
+  },
+  {
+    ...basicTrace[1],
+    resource: mockedResources[1],
+  },
+  {
+    ...basicTrace[2],
+    resource: mockedResources[1],
+  },
+];
+
+export const multiResourceMetrics: MetricRecord[] = [
+  {
+    ...mockCounter,
+    resource: mockedResources[0],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+  {
+    ...mockObserver,
+    resource: mockedResources[1],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+  {
+    ...mockCounter,
+    resource: mockedResources[0],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+];
+
+export const multiInstrumentationLibraryMetrics: MetricRecord[] = [
+  {
+    ...mockCounter,
+    resource: mockedResources[0],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+  {
+    ...mockObserver,
+    resource: mockedResources[0],
+    instrumentationLibrary: mockedInstrumentationLibraries[1],
+  },
+  {
+    ...mockCounter,
+    resource: mockedResources[0],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+];
+
+export const multiInstrumentationLibraryTrace: ReadableSpan[] = [
+  {
+    ...basicTrace[0],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+  {
+    ...basicTrace[1],
+    instrumentationLibrary: mockedInstrumentationLibraries[0],
+  },
+  {
+    ...basicTrace[2],
+    instrumentationLibrary: mockedInstrumentationLibraries[1],
+  },
+];
 
 export function ensureExportedEventsAreCorrect(
   events: opentelemetryProto.trace.v1.Span.Event[]
@@ -436,6 +625,108 @@ export function ensureWebResourceIsCorrect(
   });
 }
 
+export function ensureCounterIsCorrect(
+  metric: collectorTypes.opentelemetryProto.metrics.v1.Metric
+) {
+  assert.deepStrictEqual(metric, {
+    metricDescriptor: {
+      name: 'test-counter',
+      description: 'sample counter description',
+      unit: '1',
+      labels: [],
+      type: 2,
+      temporality: 3,
+    },
+    doubleDataPoints: [],
+    int64DataPoints: [
+      {
+        labels: [],
+        value: 0,
+        startTimeUnixNano: 1592602232694000000,
+        timeUnixNano: 0,
+      },
+    ],
+    summaryDataPoints: [],
+    histogramDataPoints: [],
+  });
+}
+
+export function ensureExportedCounterIsCorrect(
+  metric: collectorTypes.opentelemetryProto.metrics.v1.Metric
+) {
+  assert.deepStrictEqual(metric, {
+    metricDescriptor: {
+      name: 'test-counter',
+      description: 'sample counter description',
+      unit: '1',
+      type: 'MONOTONIC_INT64',
+      temporality: 'CUMULATIVE',
+    },
+    doubleDataPoints: [],
+    int64DataPoints: [
+      {
+        labels: [],
+        value: '0',
+        startTimeUnixNano: '1592602232694000128',
+        timeUnixNano: '0',
+      },
+    ],
+    summaryDataPoints: [],
+    histogramDataPoints: [],
+  });
+}
+
+export function ensureExportedObserverIsCorrect(
+  metric: collectorTypes.opentelemetryProto.metrics.v1.Metric
+) {
+  assert.deepStrictEqual(metric, {
+    metricDescriptor: {
+      name: 'test-observer',
+      description: 'sample observer description',
+      unit: '2',
+      type: 'DOUBLE',
+      temporality: 'INSTANTANEOUS',
+    },
+    doubleDataPoints: [
+      {
+        labels: [],
+        value: 0,
+        startTimeUnixNano: '1592602232694000128',
+        timeUnixNano: '0',
+      },
+    ],
+    int64DataPoints: [],
+    summaryDataPoints: [],
+    histogramDataPoints: [],
+  });
+}
+
+export function ensureObserverIsCorrect(
+  metric: collectorTypes.opentelemetryProto.metrics.v1.Metric
+) {
+  assert.deepStrictEqual(metric, {
+    metricDescriptor: {
+      name: 'test-observer',
+      description: 'sample observer description',
+      unit: '2',
+      labels: [],
+      type: 3,
+      temporality: 1,
+    },
+    doubleDataPoints: [
+      {
+        labels: [],
+        value: 0,
+        startTimeUnixNano: 1592602232694000000,
+        timeUnixNano: 0,
+      },
+    ],
+    int64DataPoints: [],
+    summaryDataPoints: [],
+    histogramDataPoints: [],
+  });
+}
+
 export function ensureResourceIsCorrect(
   resource: collectorTypes.opentelemetryProto.resource.v1.Resource
 ) {
@@ -509,6 +800,37 @@ export function ensureExportTraceServiceRequestIsSet(
 
   const spans = instrumentationLibrarySpans[0].spans;
   assert.strictEqual(spans && spans.length, 1, 'spans are missing');
+}
+
+export function ensureExportMetricsServiceRequestIsSet(
+  json: collectorTypes.opentelemetryProto.collector.metrics.v1.ExportMetricsServiceRequest
+) {
+  const resourceMetrics = json.resourceMetrics;
+  assert.strictEqual(resourceMetrics.length, 2, 'resourceMetrics is missing');
+
+  const resource = resourceMetrics[0].resource;
+  assert.strictEqual(!!resource, true, 'resource is missing');
+
+  const instrumentationLibraryMetrics =
+    resourceMetrics[0].instrumentationLibraryMetrics;
+  assert.strictEqual(
+    instrumentationLibraryMetrics && instrumentationLibraryMetrics.length,
+    1,
+    'instrumentationLibraryMetrics is missing'
+  );
+
+  const instrumentationLibrary =
+    instrumentationLibraryMetrics[0].instrumentationLibrary;
+  assert.strictEqual(
+    !!instrumentationLibrary,
+    true,
+    'instrumentationLibrary is missing'
+  );
+
+  const metric1 = resourceMetrics[0].instrumentationLibraryMetrics[0].metrics;
+  const metric2 = resourceMetrics[1].instrumentationLibraryMetrics[0].metrics;
+  assert.strictEqual(metric1.length, 1, 'Metrics are missing');
+  assert.strictEqual(metric2.length, 1, 'Metrics are missing');
 }
 
 export function ensureMetadataIsCorrect(
