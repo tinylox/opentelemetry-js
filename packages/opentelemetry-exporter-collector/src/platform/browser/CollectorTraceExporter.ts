@@ -14,41 +14,34 @@
  * limitations under the License.
  */
 
-import {
-  CollectorExporterBase,
-  CollectorExporterConfigBase,
-} from '../../CollectorExporterBase';
+import { CollectorTraceExporterBase } from '../../CollectorTraceExporterBase';
 import { ReadableSpan } from '@opentelemetry/tracing';
 import { toCollectorExportTraceServiceRequest } from '../../transform';
+import { CollectorExporterConfigBrowser } from './types';
 import * as collectorTypes from '../../types';
+import { parseHeaders } from '../../util';
 
-/**
- * Collector Exporter Config for Web
- */
-export interface CollectorExporterConfig extends CollectorExporterConfigBase {
-  headers?: { [key: string]: string };
-}
-
-const DEFAULT_COLLECTOR_URL = 'http://localhost:55678/v1/trace';
+const DEFAULT_COLLECTOR_URL = 'http://localhost:55680/v1/trace';
 
 /**
  * Collector Exporter for Web
  */
-export class CollectorExporter extends CollectorExporterBase<
-  CollectorExporterConfig
+export class CollectorTraceExporter extends CollectorTraceExporterBase<
+  CollectorExporterConfigBrowser
 > {
-  DEFAULT_HEADERS: { [key: string]: string } = {
+  DEFAULT_HEADERS: Record<string, string> = {
     [collectorTypes.OT_REQUEST_HEADER]: '1',
   };
-  private _headers: { [key: string]: string };
+  private _headers: Record<string, string>;
   private _useXHR: boolean = false;
 
   /**
    * @param config
    */
-  constructor(config: CollectorExporterConfig = {}) {
+  constructor(config: CollectorExporterConfigBrowser = {}) {
     super(config);
-    this._headers = config.headers || this.DEFAULT_HEADERS;
+    this._headers =
+      parseHeaders(config.headers, this.logger) || this.DEFAULT_HEADERS;
     this._useXHR =
       !!config.headers || typeof navigator.sendBeacon !== 'function';
   }
@@ -61,8 +54,8 @@ export class CollectorExporter extends CollectorExporterBase<
     window.removeEventListener('unload', this.shutdown);
   }
 
-  getDefaultUrl(url: string | undefined) {
-    return url || DEFAULT_COLLECTOR_URL;
+  getDefaultUrl(config: CollectorExporterConfigBrowser) {
+    return config.url || DEFAULT_COLLECTOR_URL;
   }
 
   sendSpans(
